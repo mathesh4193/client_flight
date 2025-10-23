@@ -1,165 +1,97 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { flightsAPI } from '../services/api';
-import { FaPlane, FaClock, FaMapMarkerAlt, FaUsers, FaWifi, FaUtensils, FaTv } from 'react-icons/fa';
+import { FaPlaneDeparture, FaPlaneArrival, FaClock, FaDollarSign } from 'react-icons/fa';
 
 const FlightDetails = () => {
   const { id } = useParams();
-  const navigate = useNavigate();
   const [flight, setFlight] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    fetchFlightDetails();
+    const fetchFlight = async () => {
+      try {
+        const res = await flightsAPI.getById(id);
+        const flightData = res.data.flight || res.data;
+        setFlight(flightData);
+      } catch (error) {
+        console.error("Error fetching flight:", error);
+      }
+    };
+    fetchFlight();
   }, [id]);
 
-  const fetchFlightDetails = async () => {
-    try {
-      const response = await flightsAPI.getById(id);
-      setFlight(response.data.flight);
-    } catch (err) {
-      setError('Failed to load flight details');
-      console.error('Flight details error:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  if (!flight) return <p className="text-center mt-20 text-lg">Loading flight details...</p>;
 
-  const handleBookFlight = () => {
-    navigate(`/booking/${id}`);
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="spinner"></div>
-      </div>
-    );
+  // Fallback values
+  const airline = flight.airline || "Unknown Airline";
+  const flightNumber = flight.flightNumber || "N/A";
+  const origin = flight.origin || "Unknown Airport";
+  const destination = flight.destination || "Unknown Airport";
+  const departureDate = flight.departureDate ? new Date(flight.departureDate) : null;
+  const arrivalDate = flight.arrivalDate ? new Date(flight.arrivalDate) : null;
+  const departure = departureDate ? departureDate.toLocaleString() : "N/A";
+  const arrival = arrivalDate ? arrivalDate.toLocaleString() : "N/A";
+  
+  // Calculate duration dynamically
+  let duration = "N/A";
+  if (departureDate && arrivalDate) {
+    const diffMs = arrivalDate - departureDate; // difference in milliseconds
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+    duration = `${diffHours}h ${diffMinutes}m`;
   }
 
-  if (error || !flight) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Flight Not Found</h2>
-          <p className="text-gray-600 mb-4">{error || 'The requested flight could not be found.'}</p>
-          <button
-            onClick={() => navigate('/search')}
-            className="bg-primary-600 text-white px-6 py-2 rounded-md hover:bg-primary-700"
-          >
-            Back to Search
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const price = flight.price ? `Rs ${flight.price}` : "N/A";
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-          {/* Flight Header */}
-          <div className="bg-primary-600 text-white p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-2xl font-bold">{flight.flightNumber}</h1>
-                <p className="text-primary-100">{flight.airline}</p>
-              </div>
-              <div className="text-right">
-                <div className="text-3xl font-bold">
-                  ${flight.pricing.economy?.basePrice || 0}
-                </div>
-                <div className="text-primary-100">Economy Class</div>
-              </div>
-            </div>
+    <div className="max-w-3xl mx-auto mt-10 p-6 bg-white rounded-xl shadow-lg space-y-6">
+      <h2 className="text-2xl font-bold text-gray-800 text-center">
+        {airline} ({flightNumber})
+      </h2>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="flex items-center space-x-3 bg-blue-50 p-4 rounded-lg">
+          <FaPlaneDeparture className="text-blue-600 text-2xl" />
+          <div>
+            <p className="text-gray-500">Departure</p>
+            <p className="font-semibold">{departure}</p>
+            <p className="text-gray-700">{origin}</p>
           </div>
+        </div>
 
-          {/* Flight Details */}
-          <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-              <div>
-                <h3 className="text-lg font-semibold mb-4">Departure</h3>
-                <div className="space-y-2">
-                  <div className="flex items-center">
-                    <FaMapMarkerAlt className="h-4 w-4 text-gray-400 mr-2" />
-                    <span className="font-medium">{flight.origin.city} ({flight.origin.code})</span>
-                  </div>
-                  <div className="flex items-center">
-                    <FaClock className="h-4 w-4 text-gray-400 mr-2" />
-                    <span>{new Date(flight.departure.date + 'T' + flight.departure.time).toLocaleString()}</span>
-                  </div>
-                  {flight.gate && (
-                    <div className="text-sm text-gray-600">Gate: {flight.gate}</div>
-                  )}
-                </div>
-              </div>
+        <div className="flex items-center space-x-3 bg-green-50 p-4 rounded-lg">
+          <FaPlaneArrival className="text-green-600 text-2xl" />
+          <div>
+            <p className="text-gray-500">Arrival</p>
+            <p className="font-semibold">{arrival}</p>
+            <p className="text-gray-700">{destination}</p>
+          </div>
+        </div>
 
-              <div>
-                <h3 className="text-lg font-semibold mb-4">Arrival</h3>
-                <div className="space-y-2">
-                  <div className="flex items-center">
-                    <FaMapMarkerAlt className="h-4 w-4 text-gray-400 mr-2" />
-                    <span className="font-medium">{flight.destination.city} ({flight.destination.code})</span>
-                  </div>
-                  <div className="flex items-center">
-                    <FaClock className="h-4 w-4 text-gray-400 mr-2" />
-                    <span>{new Date(flight.arrival.date + 'T' + flight.arrival.time).toLocaleString()}</span>
-                  </div>
-                  <div className="text-sm text-gray-600">Duration: {flight.duration}</div>
-                </div>
-              </div>
-            </div>
+        <div className="flex items-center space-x-3 bg-yellow-50 p-4 rounded-lg">
+          <FaClock className="text-yellow-600 text-2xl" />
+          <div>
+            <p className="text-gray-500">Duration</p>
+            <p className="font-semibold">{duration}</p>
+          </div>
+        </div>
 
-            {/* Pricing */}
-            <div className="mb-8">
-              <h3 className="text-lg font-semibold mb-4">Pricing</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {Object.entries(flight.pricing).map(([classType, pricing]) => (
-                  <div key={classType} className="border border-gray-200 rounded-lg p-4">
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-primary-600">
-                        ${pricing.basePrice}
-                      </div>
-                      <div className="text-sm text-gray-500 capitalize">{classType} Class</div>
-                      <div className="text-xs text-gray-400 mt-1">
-                        {pricing.availableSeats} seats available
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Amenities */}
-            {flight.amenities && flight.amenities.length > 0 && (
-              <div className="mb-8">
-                <h3 className="text-lg font-semibold mb-4">Amenities</h3>
-                <div className="flex flex-wrap gap-4">
-                  {flight.amenities.map((amenity, index) => (
-                    <div key={index} className="flex items-center text-sm text-gray-600">
-                      {amenity === 'wifi' && <FaWifi className="h-4 w-4 mr-2" />}
-                      {amenity === 'entertainment' && <FaTv className="h-4 w-4 mr-2" />}
-                      {amenity === 'meals' && <FaUtensils className="h-4 w-4 mr-2" />}
-                      <span className="capitalize">{amenity}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Book Button */}
-            <div className="text-center">
-              <button
-                onClick={handleBookFlight}
-                className="bg-primary-600 text-white px-8 py-3 rounded-lg hover:bg-primary-700 transition-colors text-lg font-semibold"
-              >
-                Book This Flight
-              </button>
-            </div>
+        <div className="flex items-center space-x-3 bg-red-50 p-4 rounded-lg">
+          <FaDollarSign className="text-red-600 text-2xl" />
+          <div>
+            <p className="text-gray-500">Price</p>
+            <p className="font-semibold">{price}</p>
           </div>
         </div>
       </div>
+
+      <button
+        onClick={() => navigate(`/booking/${flight._id}`)}
+        className="w-full bg-primary-600 text-white py-3 rounded-lg font-semibold hover:bg-primary-700 transition"
+      >
+        Book Now
+      </button>
     </div>
   );
 };

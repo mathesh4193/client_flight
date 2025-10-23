@@ -4,11 +4,7 @@ import {
   FaPlane, 
   FaPhone, 
   FaEnvelope, 
-  FaMapMarkerAlt,
-  FaFacebook,
-  FaTwitter,
-  FaInstagram,
-  FaLinkedin
+  FaMapMarkerAlt
 } from 'react-icons/fa';
 
 const Footer = () => {
@@ -26,20 +22,6 @@ const Footer = () => {
               Your trusted partner for seamless flight bookings and travel experiences. 
               We make flying simple, affordable, and enjoyable.
             </p>
-            <div className="flex space-x-4">
-              <a href="#" className="text-gray-400 hover:text-white transition-colors">
-                <FaFacebook className="h-5 w-5" />
-              </a>
-              <a href="#" className="text-gray-400 hover:text-white transition-colors">
-                <FaTwitter className="h-5 w-5" />
-              </a>
-              <a href="#" className="text-gray-400 hover:text-white transition-colors">
-                <FaInstagram className="h-5 w-5" />
-              </a>
-              <a href="#" className="text-gray-400 hover:text-white transition-colors">
-                <FaLinkedin className="h-5 w-5" />
-              </a>
-            </div>
           </div>
 
           {/* Quick Links */}
@@ -78,21 +60,6 @@ const Footer = () => {
                   Flight Booking
                 </a>
               </li>
-              <li>
-                <a href="#" className="text-gray-300 hover:text-white transition-colors text-sm">
-                  Hotel Booking
-                </a>
-              </li>
-              <li>
-                <a href="#" className="text-gray-300 hover:text-white transition-colors text-sm">
-                  Car Rental
-                </a>
-              </li>
-              <li>
-                <a href="#" className="text-gray-300 hover:text-white transition-colors text-sm">
-                  Travel Insurance
-                </a>
-              </li>
             </ul>
           </div>
 
@@ -102,7 +69,7 @@ const Footer = () => {
             <div className="space-y-3">
               <div className="flex items-center space-x-3">
                 <FaPhone className="h-4 w-4 text-primary-400" />
-                <span className="text-gray-300 text-sm">+1 (555) 123-4567</span>
+                <span className="text-gray-300 text-sm">+91 9876543210</span>
               </div>
               <div className="flex items-center space-x-3">
                 <FaEnvelope className="h-4 w-4 text-primary-400" />
@@ -111,8 +78,8 @@ const Footer = () => {
               <div className="flex items-start space-x-3">
                 <FaMapMarkerAlt className="h-4 w-4 text-primary-400 mt-1" />
                 <span className="text-gray-300 text-sm">
-                  123 Aviation Blvd<br />
-                  New York, NY 10001
+                  123 Madurai<br />
+                  Tamil Nadu, 625014
                 </span>
               </div>
             </div>

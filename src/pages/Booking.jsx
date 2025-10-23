@@ -7,51 +7,54 @@ import { config } from '../config';
 
 const stripePromise = loadStripe(config.STRIPE_PUBLISHABLE_KEY);
 
-const PaymentSection = ({ clientSecret, bookingId, onSuccess }) => {
+// Stripe Payment Form Component
+const PaymentForm = ({ clientSecret, bookingId, onSuccess }) => {
   const stripe = useStripe();
   const elements = useElements();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handlePay = async (e) => {
+  const handlePayment = async (e) => {
     e.preventDefault();
     if (!stripe || !elements) return;
+
     setLoading(true);
     setError('');
 
-    const { error: stripeError, paymentIntent } = await stripe.confirmPayment({
-      elements,
-      confirmParams: {
-        // For card wallets etc., no return URL, handle inline
-      },
-      redirect: 'if_required',
-    });
-
-    if (stripeError) {
-      setError(stripeError.message || 'Payment failed. Try again.');
-      setLoading(false);
-      return;
-    }
-
     try {
+      const { error: stripeError, paymentIntent } = await stripe.confirmPayment({
+        elements,
+        confirmParams: {
+          return_url: window.location.href, // optional for redirection
+        },
+        redirect: 'if_required',
+      });
+
+      if (stripeError) {
+        setError(stripeError.message);
+        setLoading(false);
+        return;
+      }
+
+      // Confirm payment on backend
       await paymentsAPI.confirm({ paymentIntentId: paymentIntent.id });
       onSuccess(paymentIntent.id);
     } catch (err) {
-      console.error('Confirm payment error:', err);
-      setError('Payment confirmation failed on server.');
+      console.error(err);
+      setError('Payment failed. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <form onSubmit={handlePay} className="space-y-6">
-      <PaymentElement options={{ layout: 'tabs' }} />
+    <form onSubmit={handlePayment} className="space-y-4">
+      <PaymentElement />
       {error && <p className="text-red-600 text-sm">{error}</p>}
       <button
         type="submit"
         disabled={!stripe || loading}
-        className="w-full bg-primary-600 text-white px-6 py-3 rounded-md hover:bg-primary-700 disabled:opacity-50"
+        className="w-full bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 disabled:opacity-50"
       >
         {loading ? 'Processing…' : 'Pay Now'}
       </button>
@@ -59,199 +62,147 @@ const PaymentSection = ({ clientSecret, bookingId, onSuccess }) => {
   );
 };
 
+// Main Booking Component
 const Booking = () => {
   const { flightId } = useParams();
   const navigate = useNavigate();
+
   const [flight, setFlight] = useState(null);
-  const [seatClass, setSeatClass] = useState('economy');
-  const [passenger, setPassenger] = useState({ firstName: '', lastName: '', dateOfBirth: '', gender: 'male' });
-  const [contactInfo, setContactInfo] = useState({ email: '', phone: '' });
-  const [creating, setCreating] = useState(false);
   const [booking, setBooking] = useState(null);
   const [clientSecret, setClientSecret] = useState(null);
+  const [seatClass, setSeatClass] = useState('economy');
+  const [passengers, setPassengers] = useState([{ firstName: '', lastName: '', dateOfBirth: '', gender: 'male' }]);
+  const [contactInfo, setContactInfo] = useState({ email: '', phone: '' });
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Fetch flight data
   useEffect(() => {
-    const load = async () => {
+    const fetchFlight = async () => {
       try {
         const res = await flightsAPI.getById(flightId);
         setFlight(res.data.flight);
       } catch (err) {
-        console.error('Load flight error:', err);
-        setError('Failed to load flight');
+        console.error(err);
+        setError('Failed to load flight.');
       }
     };
-    load();
+    fetchFlight();
   }, [flightId]);
 
-  const handleCreateBooking = async (e) => {
+  // Create booking
+  const handleBooking = async (e) => {
     e.preventDefault();
     setError('');
-    setCreating(true);
-    try {
-      const passengers = [{ ...passenger, seatClass }];
-      const res = await bookingsAPI.create({ flightId, passengers, contactInfo });
-      const created = res.data.booking;
-      setBooking(created);
+    if (!flight) return;
+    setLoading(true);
 
-      // Create Stripe Payment Intent
-      const payRes = await paymentsAPI.createIntent({ bookingId: created.id });
+    try {
+      const totalPrice =
+        seatClass === 'economy'
+          ? flight.price * passengers.length
+          : seatClass === 'business'
+          ? flight.price * 1.5 * passengers.length
+          : flight.price * 2 * passengers.length;
+
+      const res = await bookingsAPI.create({
+        flight: flight._id,
+        passengers,
+        cabinClass: seatClass,
+        totalPrice,
+        contactInfo, // send contact info to backend
+      });
+
+      const createdBooking = res.data.booking;
+      setBooking(createdBooking);
+
+      // Create Stripe payment intent
+      const payRes = await paymentsAPI.createIntent({ bookingId: createdBooking._id });
       setClientSecret(payRes.data.clientSecret);
     } catch (err) {
-      console.error('Create booking error:', err);
-      setError(err.response?.data?.message || 'Failed to create booking');
+      console.error(err);
+      setError(err.response?.data?.message || 'Failed to create booking.');
     } finally {
-      setCreating(false);
+      setLoading(false);
     }
   };
 
-  const handlePaymentSuccess = (paymentIntentId) => {
-    // Navigate to booking details page
-    if (booking?.id) {
-      navigate(`/bookings/${booking.id}`);
-    }
+  const handlePaymentSuccess = () => {
+    navigate(`/bookings/${booking._id}`);
   };
 
   if (!flight) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Booking</h1>
-          <p className="text-gray-600">{error || 'Loading flight…'}</p>
-        </div>
+        <p className="text-gray-700">{error || 'Loading flight…'}</p>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-3xl mx-auto px-4">
         <div className="bg-white rounded-lg shadow p-6 space-y-6">
-          {/* Flight summary */}
           <div>
-            <h2 className="text-xl font-semibold text-gray-900">{flight.airline} {flight.flightNumber}</h2>
-            <p className="text-gray-700">
-              {flight.origin?.city} ({flight.origin?.code}) → {flight.destination?.city} ({flight.destination?.code})
-            </p>
-            <p className="text-gray-600 text-sm">
-              Depart: {new Date(flight.departure?.date).toLocaleString()} — Arrive: {new Date(flight.arrival?.date).toLocaleString()}
-            </p>
+            <h2 className="text-xl font-semibold">{flight.airline} {flight.flightNumber}</h2>
+            <p>{flight.origin} → {flight.destination}</p>
+            <p>Departure: {new Date(flight.departureDate).toLocaleString()}</p>
+            <p>Price(RS):{flight.price}</p>
           </div>
 
-          {/* Booking form */}
           {!booking && (
-            <form onSubmit={handleCreateBooking} className="space-y-6">
-              {/* Seat class */}
+            <form onSubmit={handleBooking} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Class</label>
                 <select
                   value={seatClass}
                   onChange={(e) => setSeatClass(e.target.value)}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                  className="w-full border rounded-md p-2"
                 >
-                  <option value="economy">Economy — ${flight.pricing?.economy?.basePrice}</option>
-                  <option value="business">Business — ${flight.pricing?.business?.basePrice}</option>
-                  <option value="first">First — ${flight.pricing?.first?.basePrice}</option>
+                  <option value="economy">Economy</option>
+                  <option value="business">Business</option>
+                  <option value="first">First</option>
                 </select>
               </div>
 
-              {/* Passenger */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">First name</label>
-                  <input
-                    type="text"
-                    value={passenger.firstName}
-                    onChange={(e) => setPassenger({ ...passenger, firstName: e.target.value })}
-                    required
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Last name</label>
-                  <input
-                    type="text"
-                    value={passenger.lastName}
-                    onChange={(e) => setPassenger({ ...passenger, lastName: e.target.value })}
-                    required
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Date of birth</label>
-                  <input
-                    type="date"
-                    value={passenger.dateOfBirth}
-                    onChange={(e) => setPassenger({ ...passenger, dateOfBirth: e.target.value })}
-                    required
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
-                  <select
-                    value={passenger.gender}
-                    onChange={(e) => setPassenger({ ...passenger, gender: e.target.value })}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
-                  >
-                    <option value="male">Male</option>
-                    <option value="female">Female</option>
-                    <option value="other">Other</option>
-                  </select>
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <input
+                  type="email"
+                  value={contactInfo.email}
+                  onChange={(e) => setContactInfo({ ...contactInfo, email: e.target.value })}
+                  required
+                  className="w-full border rounded-md p-2"
+                />
               </div>
 
-              {/* Contact info */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-                  <input
-                    type="email"
-                    value={contactInfo.email}
-                    onChange={(e) => setContactInfo({ ...contactInfo, email: e.target.value })}
-                    required
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-                  <input
-                    type="tel"
-                    value={contactInfo.phone}
-                    onChange={(e) => setContactInfo({ ...contactInfo, phone: e.target.value })}
-                    required
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
-                  />
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                <input
+                  type="tel"
+                  value={contactInfo.phone}
+                  onChange={(e) => setContactInfo({ ...contactInfo, phone: e.target.value })}
+                  required
+                  className="w-full border rounded-md p-2"
+                />
               </div>
 
-              {error && <p className="text-red-600 text-sm">{error}</p>}
+              {error && <p className="text-red-600">{error}</p>}
 
               <button
                 type="submit"
-                disabled={creating}
-                className="w-full bg-primary-600 text-white px-6 py-3 rounded-md hover:bg-primary-700 disabled:opacity-50"
+                disabled={loading}
+                className="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
               >
-                {creating ? 'Creating booking…' : 'Continue to Payment'}
+                {loading ? 'Creating booking…' : 'Book & Pay'}
               </button>
             </form>
           )}
 
-          {/* Payment */}
           {booking && clientSecret && (
-            <div className="space-y-4">
-              <div className="p-4 bg-gray-50 rounded-md">
-                <p className="text-sm text-gray-700">
-                  Booking reference: <span className="font-semibold">{booking.bookingReference}</span>
-                </p>
-                <p className="text-sm text-gray-700">
-                  Total: <span className="font-semibold">${booking.pricing?.totalPrice} {booking.pricing?.currency}</span>
-                </p>
-              </div>
-              <Elements stripe={stripePromise} options={{ clientSecret }}>
-                <PaymentSection clientSecret={clientSecret} bookingId={booking.id} onSuccess={handlePaymentSuccess} />
-              </Elements>
-            </div>
+            <Elements stripe={stripePromise} options={{ clientSecret }}>
+              <PaymentForm clientSecret={clientSecret} bookingId={booking._id} onSuccess={handlePaymentSuccess} />
+            </Elements>
           )}
         </div>
       </div>
