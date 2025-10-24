@@ -34,7 +34,7 @@ const Footer = () => {
                 </Link>
               </li>
               <li>
-                <Link to="/bookings" className="text-gray-300 hover:text-white transition-colors text-sm">
+                <Link to="/my-bookings" className="text-gray-300 hover:text-white transition-colors text-sm">
                   My Bookings
                 </Link>
               </li>
@@ -56,9 +56,9 @@ const Footer = () => {
             <h3 className="text-lg font-semibold">Services</h3>
             <ul className="space-y-2">
               <li>
-                <a href="#" className="text-gray-300 hover:text-white transition-colors text-sm">
+                <Link to="/search" className="text-gray-300 hover:text-white transition-colors text-sm">
                   Flight Booking
-                </a>
+                </Link>
               </li>
             </ul>
           </div>
@@ -93,15 +93,15 @@ const Footer = () => {
               © 2024 FlightBook. All rights reserved.
             </p>
             <div className="flex space-x-6 mt-4 md:mt-0">
-              <a href="#" className="text-gray-400 hover:text-white transition-colors text-sm">
+              <Link to="/privacy" className="text-gray-400 hover:text-white transition-colors text-sm">
                 Privacy Policy
-              </a>
-              <a href="#" className="text-gray-400 hover:text-white transition-colors text-sm">
+              </Link>
+              <Link to="/terms" className="text-gray-400 hover:text-white transition-colors text-sm">
                 Terms of Service
-              </a>
-              <a href="#" className="text-gray-400 hover:text-white transition-colors text-sm">
+              </Link>
+              <Link to="/cookies" className="text-gray-400 hover:text-white transition-colors text-sm">
                 Cookie Policy
-              </a>
+              </Link>
             </div>
           </div>
         </div>

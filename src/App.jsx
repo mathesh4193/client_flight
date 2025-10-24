@@ -87,10 +87,10 @@ function App() {
               } 
             />
             <Route 
-              path="/bookings" 
+              path="/my-bookings" 
               element={
                 <ProtectedRoute>
-                  <Layout><Bookings /></Layout>
+                  <Layout><MyBookings /></Layout>
                 </ProtectedRoute>
               } 
             />

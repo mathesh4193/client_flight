@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { flightsAPI } from '../services/api'; // axios instance
 import {
-  FaPlane,
   FaSearch,
   FaMapMarkerAlt,
   FaCalendarAlt,
