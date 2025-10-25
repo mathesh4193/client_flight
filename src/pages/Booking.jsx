@@ -2,7 +2,12 @@ import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { flightsAPI, bookingsAPI, paymentsAPI } from "../services/api";
 import { loadStripe } from "@stripe/stripe-js";
-import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
+import {
+  Elements,
+  PaymentElement,
+  useStripe,
+  useElements,
+} from "@stripe/react-stripe-js";
 import { config } from "../config";
 import { useAuth } from "../context/AuthContext";
 
@@ -16,10 +21,17 @@ const PaymentForm = ({ clientSecret, bookingId, onSuccess }) => {
   const elements = useElements();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [isReady, setIsReady] = useState(false);
 
   const handlePayment = async (e) => {
     e.preventDefault();
     if (!stripe || !elements) return;
+
+    const paymentElement = elements.getElement(PaymentElement);
+    if (!paymentElement) {
+      setError("Payment form is not ready yet. Please wait a moment and try again.");
+      return;
+    }
 
     setLoading(true);
     setError("");
@@ -37,9 +49,16 @@ const PaymentForm = ({ clientSecret, bookingId, onSuccess }) => {
         return;
       }
 
-      // Confirm payment in backend
-      await paymentsAPI.confirm({ paymentIntentId: paymentIntent.id, bookingId });
-      onSuccess(paymentIntent.id);
+      if (paymentIntent && paymentIntent.status === "succeeded") {
+        // Confirm payment in backend
+        await paymentsAPI.confirm({
+          paymentIntentId: paymentIntent.id,
+          bookingId,
+        });
+        onSuccess(paymentIntent.id);
+      } else {
+        setError("Payment incomplete or failed. Please try again.");
+      }
     } catch (err) {
       console.error(err);
       setError("Payment failed. Please try again.");
@@ -50,11 +69,11 @@ const PaymentForm = ({ clientSecret, bookingId, onSuccess }) => {
 
   return (
     <form onSubmit={handlePayment} className="space-y-4">
-      <PaymentElement />
+      <PaymentElement onReady={() => setIsReady(true)} />
       {error && <p className="text-red-600 text-sm">{error}</p>}
       <button
         type="submit"
-        disabled={!stripe || loading}
+        disabled={!stripe || loading || !isReady}
         className="w-full bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 disabled:opacity-50"
       >
         {loading ? "Processing…" : "Pay Now"}
@@ -140,6 +159,7 @@ const Booking = () => {
           ? flight.price * 1.5 * passengers.length
           : flight.price * 2 * passengers.length;
 
+      // Create booking
       const res = await bookingsAPI.create({
         flightId: flight._id,
         passengers,
@@ -151,12 +171,17 @@ const Booking = () => {
       const createdBooking = res.data.booking;
       setBooking(createdBooking);
 
-      // Create payment intent
+      // Create Stripe Payment Intent
       const payRes = await paymentsAPI.createIntent({
         bookingId: createdBooking._id,
         paymentMethod: "credit_card",
       });
-      setClientSecret(payRes.data.clientSecret);
+
+      if (payRes.data?.clientSecret) {
+        setClientSecret(payRes.data.clientSecret);
+      } else {
+        throw new Error("Payment intent failed to initialize.");
+      }
     } catch (err) {
       console.error(err);
       setError(err.response?.data?.message || "Booking failed.");
@@ -187,20 +212,26 @@ const Booking = () => {
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-3xl mx-auto bg-white rounded-lg shadow-lg p-6 space-y-6">
+        {/* Flight Info */}
         <div>
           <h2 className="text-xl font-semibold">
             {flight.airline} {flight.flightNumber}
           </h2>
-          <p>{flight.origin} → {flight.destination}</p>
+          <p>
+            {flight.origin} → {flight.destination}
+          </p>
           <p>Departure: {new Date(flight.departureDate).toLocaleString()}</p>
           <p>Base Price (per seat): ₹{flight.price}</p>
         </div>
 
+        {/* Booking Form */}
         {!booking && (
           <form onSubmit={handleBooking} className="space-y-6">
             {/* Seat Class */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Seat Class</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Seat Class
+              </label>
               <select
                 value={seatClass}
                 onChange={(e) => setSeatClass(e.target.value)}
@@ -304,8 +335,12 @@ const Booking = () => {
 
             {/* Summary */}
             <div className="p-3 bg-gray-100 rounded-md">
-              <p className="font-semibold">Total Passengers: {passengers.length}</p>
-              <p className="font-semibold">Total Amount: ₹{totalPrice.toFixed(2)}</p>
+              <p className="font-semibold">
+                Total Passengers: {passengers.length}
+              </p>
+              <p className="font-semibold">
+                Total Amount: ₹{totalPrice.toFixed(2)}
+              </p>
             </div>
 
             {error && <p className="text-red-600">{error}</p>}
@@ -320,6 +355,7 @@ const Booking = () => {
           </form>
         )}
 
+        {/* Payment Section */}
         {booking && clientSecret && (
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-gray-800">
