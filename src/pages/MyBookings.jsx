@@ -1,14 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { bookingsAPI } from "../services/api";
 import { useAuth } from "../context/AuthContext";
-import {
-  FaPlaneDeparture,
-  FaPlaneArrival,
-  FaUserFriends,
-  FaCalendarAlt,
-  FaMoneyBillWave,
-  FaCreditCard,
-} from "react-icons/fa";
+import { FaPlaneDeparture, FaPlaneArrival, FaUserFriends, FaCalendarAlt, FaMoneyBillWave } from "react-icons/fa";
 
 const MyBookings = () => {
   const { user } = useAuth();
@@ -18,16 +11,29 @@ const MyBookings = () => {
   useEffect(() => {
     const fetchBookings = async () => {
       try {
-        const res = await bookingsAPI.getAll(user.token);
-        setBookings(res.data.bookings);
+        const res = await bookingsAPI.getUserBookings();
+
+        if (res.data && res.data.bookings) {
+          setBookings(res.data.bookings);
+        } else if (res.data && Array.isArray(res.data)) {
+          setBookings(res.data);
+        } else {
+          setBookings([]);
+        }
       } catch (err) {
         console.error("Failed to load bookings", err);
+        setBookings([]);
       } finally {
         setLoading(false);
       }
     };
-    fetchBookings();
-  }, [user.token]);
+    
+    if (user) {
+      fetchBookings();
+    } else {
+      setLoading(false);
+    }
+  }, [user]);
 
   if (loading) {
     return (
@@ -112,9 +118,8 @@ const MyBookings = () => {
                 </p>
               </div>
 
-              {/* Booking & Payment Status */}
-              <div className="mt-4 flex flex-wrap gap-2">
-                {/* Booking Status */}
+              {/* Booking Status */}
+              <div className="mt-4">
                 <span
                   className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
                     b.status === "confirmed"
@@ -125,22 +130,6 @@ const MyBookings = () => {
                   }`}
                 >
                   {b.status ? b.status.toUpperCase() : "CONFIRMED"}
-                </span>
-
-                {/* Payment Status */}
-                <span
-                  className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${
-                    b.paymentStatus === "paid"
-                      ? "bg-green-100 text-green-700"
-                      : b.paymentStatus === "failed"
-                      ? "bg-red-100 text-red-700"
-                      : "bg-yellow-100 text-yellow-700"
-                  }`}
-                >
-                  <FaCreditCard />
-                  {b.paymentStatus
-                    ? b.paymentStatus.toUpperCase()
-                    : "UNPAID"}
                 </span>
               </div>
 

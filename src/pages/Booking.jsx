@@ -11,9 +11,7 @@ import {
 import { config } from "../config";
 import { useAuth } from "../context/AuthContext";
 
-// ===============================
 // Stripe Payment Form
-// ===============================
 const PaymentForm = ({ clientSecret, bookingId, onSuccess }) => {
   const stripe = useStripe();
   const elements = useElements();
@@ -21,7 +19,6 @@ const PaymentForm = ({ clientSecret, bookingId, onSuccess }) => {
   const [error, setError] = useState("");
   const [isReady, setIsReady] = useState(false);
 
-  // Listen for Stripe PaymentElement load errors to surface to the user
   useEffect(() => {
     if (!elements) return;
     try {
@@ -32,9 +29,7 @@ const PaymentForm = ({ clientSecret, bookingId, onSuccess }) => {
           setError(message);
         });
       }
-    } catch (_) {
-      // no-op: element API differences across versions
-    }
+    } catch (_) {}
   }, [elements]);
 
   const handlePayment = async (e) => {
@@ -43,7 +38,7 @@ const PaymentForm = ({ clientSecret, bookingId, onSuccess }) => {
 
     const paymentElement = elements.getElement(PaymentElement);
     if (!paymentElement) {
-      setError("Payment form is not ready yet. Please wait a moment and try again.");
+      setError("Payment form is not ready yet. Please wait a moment.");
       return;
     }
 
@@ -63,19 +58,18 @@ const PaymentForm = ({ clientSecret, bookingId, onSuccess }) => {
         return;
       }
 
-      if (paymentIntent && paymentIntent.status === "succeeded") {
-        // Confirm payment in backend
+      if (paymentIntent?.status === "succeeded") {
         await paymentsAPI.confirm({
           paymentIntentId: paymentIntent.id,
           bookingId,
         });
         onSuccess(paymentIntent.id);
       } else {
-        setError("Payment incomplete or failed. Please try again.");
+        setError("Payment incomplete or failed.");
       }
     } catch (err) {
       console.error(err);
-      setError(err.response?.data?.message || "Payment failed. Please try again.");
+      setError(err.response?.data?.message || "Payment failed.");
     } finally {
       setLoading(false);
     }
@@ -96,9 +90,7 @@ const PaymentForm = ({ clientSecret, bookingId, onSuccess }) => {
   );
 };
 
-// ===============================
 // Main Booking Component
-// ===============================
 const Booking = () => {
   const { flightId } = useParams();
   const navigate = useNavigate();
@@ -116,7 +108,21 @@ const Booking = () => {
   const [error, setError] = useState("");
   const [stripePromise, setStripePromise] = useState(null);
 
-  // Load Stripe publishable key from backend (with env fallback)
+  // UPI Payment state
+  const [upiId, setUpiId] = useState("");
+  const [upiProcessing, setUpiProcessing] = useState(false);
+  const [upiMessage, setUpiMessage] = useState("");
+
+  useEffect(() => {
+    if (user) {
+      setContactInfo({
+        email: user.email || "",
+        phone: user.phone || "",
+      });
+    }
+  }, [user]);
+
+  // Load Stripe publishable key
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -127,29 +133,15 @@ const Booking = () => {
           setStripePromise(loadStripe(data.publishableKey));
           return;
         }
-      } catch (err) {
-        // Network or backend missing — fall back to client config
-      }
+      } catch (err) {}
       if (mounted && config.STRIPE_PUBLISHABLE_KEY) {
         setStripePromise(loadStripe(config.STRIPE_PUBLISHABLE_KEY));
       }
     })();
-    return () => {
-      mounted = false;
-    };
+    return () => (mounted = false);
   }, []);
 
-  // Autofill contact info
-  useEffect(() => {
-    if (user) {
-      setContactInfo((prev) => ({
-        email: prev.email || user.email || "",
-        phone: prev.phone || user.phone || "",
-      }));
-    }
-  }, [user]);
-
-  // Fetch flight data
+  // Fetch flight
   useEffect(() => {
     const fetchFlight = async () => {
       try {
@@ -164,28 +156,19 @@ const Booking = () => {
   }, [flightId]);
 
   const addPassenger = () => {
-    setPassengers([
-      ...passengers,
-      { firstName: "", lastName: "", dateOfBirth: "", gender: "male" },
-    ]);
+    setPassengers([...passengers, { firstName: "", lastName: "", dateOfBirth: "", gender: "male" }]);
   };
 
   const handlePassengerChange = (index, field, value) => {
-    const updatedPassengers = passengers.map((p, i) =>
-      i === index ? { ...p, [field]: value } : p
-    );
-    setPassengers(updatedPassengers);
+    const updated = passengers.map((p, i) => (i === index ? { ...p, [field]: value } : p));
+    setPassengers(updated);
   };
 
-  const removePassenger = (index) => {
-    setPassengers(passengers.filter((_, i) => i !== index));
-  };
+  const removePassenger = (index) => setPassengers(passengers.filter((_, i) => i !== index));
 
-  // Booking handler
   const handleBooking = async (e) => {
     e.preventDefault();
     if (!flight) return;
-
     setLoading(true);
     setError("");
 
@@ -197,7 +180,6 @@ const Booking = () => {
           ? flight.price * 1.5 * passengers.length
           : flight.price * 2 * passengers.length;
 
-      // Create booking
       const res = await bookingsAPI.create({
         flightId: flight._id,
         passengers,
@@ -209,17 +191,12 @@ const Booking = () => {
       const createdBooking = res.data.booking;
       setBooking(createdBooking);
 
-      // Create Stripe Payment Intent
+      // Stripe Payment Intent
       const payRes = await paymentsAPI.createIntent({
         bookingId: createdBooking._id,
         paymentMethod: "credit_card",
       });
-
-      if (payRes.data?.clientSecret) {
-        setClientSecret(payRes.data.clientSecret);
-      } else {
-        throw new Error("Payment intent failed to initialize.");
-      }
+      if (payRes.data?.clientSecret) setClientSecret(payRes.data.clientSecret);
     } catch (err) {
       console.error(err);
       setError(err.response?.data?.message || "Booking failed.");
@@ -228,17 +205,32 @@ const Booking = () => {
     }
   };
 
-  const handlePaymentSuccess = () => {
-    navigate(`/bookings/${booking._id}`);
+  const handlePaymentSuccess = () => navigate(`/bookings/${booking._id}`);
+
+  // UPI Payment handler
+  const handleUpiPayment = async () => {
+    if (!upiId) return setUpiMessage("Enter a valid UPI ID.");
+    setUpiProcessing(true);
+    setUpiMessage("");
+
+    try {
+      await paymentsAPI.payWithUPI({ bookingId: booking._id, upiId });
+      setBooking((prev) => ({ ...prev, paymentStatus: "paid" }));
+      setUpiMessage("Payment successful ✅");
+    } catch (err) {
+      console.error(err);
+      setUpiMessage("Payment failed. Try again.");
+    } finally {
+      setUpiProcessing(false);
+    }
   };
 
-  if (!flight) {
+  if (!flight)
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <p className="text-gray-700">{error || "Loading flight details…"}</p>
+        <p className="text-gray-700">{error || "Loading flight…"}</p>
       </div>
     );
-  }
 
   const totalPrice =
     seatClass === "economy"
@@ -248,7 +240,7 @@ const Booking = () => {
       : flight.price * 2 * passengers.length;
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
+    <div className="min-h-screen bg-gray-50 py-8 px-4">
       <div className="max-w-3xl mx-auto bg-white rounded-lg shadow-lg p-6 space-y-6">
         {/* Flight Info */}
         <div>
@@ -259,7 +251,7 @@ const Booking = () => {
             {flight.origin} → {flight.destination}
           </p>
           <p>Departure: {new Date(flight.departureDate).toLocaleString()}</p>
-          <p>Base Price (per seat): ₹{flight.price}</p>
+          <p>Base Price: ₹{flight.price}</p>
         </div>
 
         {/* Booking Form */}
@@ -267,147 +259,75 @@ const Booking = () => {
           <form onSubmit={handleBooking} className="space-y-6">
             {/* Seat Class */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Seat Class
-              </label>
-              <select
-                value={seatClass}
-                onChange={(e) => setSeatClass(e.target.value)}
-                className="w-full border rounded-md p-2"
-              >
+              <label className="block text-sm font-medium text-gray-700 mb-1">Seat Class</label>
+              <select value={seatClass} onChange={(e) => setSeatClass(e.target.value)} className="w-full border rounded-md p-2">
                 <option value="economy">Economy</option>
                 <option value="business">Business</option>
                 <option value="first">First</option>
               </select>
             </div>
 
-            {/* Passenger Info */}
+            {/* Passengers */}
             <div>
               <h3 className="font-semibold text-gray-800">Passengers</h3>
               {passengers.map((p, idx) => (
                 <div key={idx} className="border p-3 rounded-md mt-2 space-y-2">
-                  <input
-                    type="text"
-                    placeholder="First Name"
-                    value={p.firstName}
-                    onChange={(e) =>
-                      handlePassengerChange(idx, "firstName", e.target.value)
-                    }
-                    className="w-full border rounded-md p-2"
-                    required
-                  />
-                  <input
-                    type="text"
-                    placeholder="Last Name"
-                    value={p.lastName}
-                    onChange={(e) =>
-                      handlePassengerChange(idx, "lastName", e.target.value)
-                    }
-                    className="w-full border rounded-md p-2"
-                    required
-                  />
-                  <input
-                    type="date"
-                    value={p.dateOfBirth}
-                    onChange={(e) =>
-                      handlePassengerChange(idx, "dateOfBirth", e.target.value)
-                    }
-                    className="w-full border rounded-md p-2"
-                    required
-                  />
-                  <select
-                    value={p.gender}
-                    onChange={(e) =>
-                      handlePassengerChange(idx, "gender", e.target.value)
-                    }
-                    className="w-full border rounded-md p-2"
-                  >
+                  <input type="text" placeholder="First Name" value={p.firstName} onChange={(e) => handlePassengerChange(idx, "firstName", e.target.value)} className="w-full border rounded-md p-2" required />
+                  <input type="text" placeholder="Last Name" value={p.lastName} onChange={(e) => handlePassengerChange(idx, "lastName", e.target.value)} className="w-full border rounded-md p-2" required />
+                  <input type="date" value={p.dateOfBirth} onChange={(e) => handlePassengerChange(idx, "dateOfBirth", e.target.value)} className="w-full border rounded-md p-2" required />
+                  <select value={p.gender} onChange={(e) => handlePassengerChange(idx, "gender", e.target.value)} className="w-full border rounded-md p-2">
                     <option value="male">Male</option>
                     <option value="female">Female</option>
                     <option value="other">Other</option>
                   </select>
-                  {passengers.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removePassenger(idx)}
-                      className="text-red-500 text-sm"
-                    >
-                      Remove Passenger
-                    </button>
-                  )}
+                  {passengers.length > 1 && <button type="button" onClick={() => removePassenger(idx)} className="text-red-500 text-sm">Remove Passenger</button>}
                 </div>
               ))}
-              <button
-                type="button"
-                onClick={addPassenger}
-                className="mt-2 bg-gray-200 px-3 py-1 rounded-md"
-              >
-                + Add Passenger
-              </button>
+              <button type="button" onClick={addPassenger} className="mt-2 bg-gray-200 px-3 py-1 rounded-md">+ Add Passenger</button>
             </div>
 
             {/* Contact Info */}
             <div>
               <h3 className="font-semibold text-gray-800">Contact Info</h3>
-              <input
-                type="email"
-                placeholder="Email"
-                value={contactInfo.email}
-                onChange={(e) =>
-                  setContactInfo({ ...contactInfo, email: e.target.value })
-                }
-                className="w-full border rounded-md p-2 mt-1"
-                required
-              />
-              <input
-                type="tel"
-                placeholder="Phone"
-                value={contactInfo.phone}
-                onChange={(e) =>
-                  setContactInfo({ ...contactInfo, phone: e.target.value })
-                }
-                className="w-full border rounded-md p-2 mt-2"
-                required
-              />
+              <input type="email" placeholder="Email" value={contactInfo.email} onChange={(e) => setContactInfo({ ...contactInfo, email: e.target.value })} className="w-full border rounded-md p-2 mt-1" required />
+              <input type="tel" placeholder="Phone" value={contactInfo.phone} onChange={(e) => setContactInfo({ ...contactInfo, phone: e.target.value })} className="w-full border rounded-md p-2 mt-2" required />
             </div>
 
             {/* Summary */}
             <div className="p-3 bg-gray-100 rounded-md">
-              <p className="font-semibold">
-                Total Passengers: {passengers.length}
-              </p>
-              <p className="font-semibold">
-                Total Amount: ₹{totalPrice.toFixed(2)}
-              </p>
+              <p className="font-semibold">Total Passengers: {passengers.length}</p>
+              <p className="font-semibold">Total Amount: ₹{totalPrice.toFixed(2)}</p>
             </div>
 
             {error && <p className="text-red-600">{error}</p>}
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
-            >
+            <button type="submit" disabled={loading} className="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
               {loading ? "Creating booking…" : "Confirm Booking"}
             </button>
           </form>
         )}
 
-        {/* Payment Section */}
+        {/* Stripe Payment */}
         {booking && clientSecret && stripePromise && (
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-gray-800">
-              Booking Confirmed — Proceed to Payment
-            </h3>
+            <h3 className="text-lg font-semibold text-gray-800">Booking Confirmed — Pay with Card</h3>
             <p>Booking ID: {booking._id}</p>
             <p>Total: ₹{booking.totalPrice}</p>
             <Elements stripe={stripePromise} options={{ clientSecret }}>
-              <PaymentForm
-                clientSecret={clientSecret}
-                bookingId={booking._id}
-                onSuccess={handlePaymentSuccess}
-              />
+              <PaymentForm clientSecret={clientSecret} bookingId={booking._id} onSuccess={handlePaymentSuccess} />
             </Elements>
+          </div>
+        )}
+
+        {/* UPI Payment */}
+        {booking && booking.paymentStatus !== "paid" && (
+          <div className="space-y-4 mt-4">
+            <h3 className="text-lg font-semibold text-gray-800">Or Pay via UPI</h3>
+            <input type="text" placeholder="Enter UPI ID" value={upiId} onChange={(e) => setUpiId(e.target.value)} className="w-full border rounded-md p-2" />
+            <button onClick={handleUpiPayment} disabled={upiProcessing} className="w-full bg-indigo-600 text-white py-2 rounded-md hover:bg-indigo-700 disabled:opacity-50">
+              {upiProcessing ? "Processing…" : "Pay via UPI"}
+            </button>
+            {upiMessage && <p className="text-green-600 text-center">{upiMessage}</p>}
           </div>
         )}
       </div>

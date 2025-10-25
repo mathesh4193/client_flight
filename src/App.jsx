@@ -95,7 +95,7 @@ function App() {
               } 
             />
             <Route 
-              path="/bookings/:id" 
+              path="/my-bookings/:id" 
               element={
                 <ProtectedRoute>
                   <Layout><BookingDetails /></Layout>

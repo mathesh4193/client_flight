@@ -1,51 +1,105 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { bookingsAPI } from "../services/api";
 import { FaPlaneDeparture, FaPlaneArrival, FaCalendarAlt, FaMoneyBillWave } from "react-icons/fa";
+import api, { bookingsAPI } from "../services/api";
 
 const BookingDetails = () => {
   const { id } = useParams();
   const [booking, setBooking] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     const fetchBooking = async () => {
       try {
         const res = await bookingsAPI.getById(id);
-        setBooking(res.data.booking);
+        if (res.data.success) {
+          setBooking(res.data.booking);
+        } else {
+          setError("Booking not found.");
+        }
       } catch (err) {
         console.error("Failed to fetch booking details", err);
+        setError("Failed to fetch booking details. Please try again.");
       } finally {
         setLoading(false);
       }
     };
+
     fetchBooking();
   }, [id]);
 
-  if (loading)
+  const handleDownload = async () => {
+    if (!booking?._id) return;
+
+    try {
+      const res = await api.get(`/api/bookings/${booking._id}/ticket`, {
+        responseType: "blob",
+      });
+
+      const blob = new Blob([res.data], { type: res.headers["content-type"] });
+      const url = window.URL.createObjectURL(blob);
+
+      // Extract filename from headers if available
+      let filename = `ticket-${booking._id}.pdf`;
+      const disposition = res.headers["content-disposition"];
+      if (disposition) {
+        const match = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
+        if (match && match[1]) filename = match[1].replace(/['"]/g, "");
+      }
+
+      // Trigger download
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+
+    } catch (err) {
+      console.error("Ticket download failed", err);
+      alert(err.response?.data?.message || "Failed to download ticket. Please ensure you are logged in.");
+    }
+  };
+
+  if (loading) {
     return (
       <div className="flex justify-center items-center h-screen">
         <p className="text-gray-500">Loading booking details...</p>
       </div>
     );
+  }
 
-  if (!booking)
+  if (error) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <p className="text-red-500">{error}</p>
+      </div>
+    );
+  }
+
+  if (!booking) {
     return (
       <div className="flex justify-center items-center h-screen">
         <p className="text-red-500">Booking not found!</p>
       </div>
     );
-
-  const handleDownload = () => {
-    window.open(`${import.meta.env.VITE_API_URL}/api/bookings/${booking._id}/ticket`, "_blank");
-  };
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 py-10 px-4">
       <div className="max-w-3xl mx-auto bg-white rounded-xl shadow-lg p-6 space-y-6">
-        <h1 className="text-2xl font-bold text-center text-blue-700 mb-4">
-          🧾 Booking Details
-        </h1>
+        <h1 className="text-2xl font-bold text-center text-blue-700 mb-4">🧾 Booking Details</h1>
+
+        {/* Booking Info */}
+        <div className="border p-4 rounded-md">
+          <h2 className="text-lg font-semibold text-gray-700 mb-2">Booking Information</h2>
+          <p className="text-sm text-gray-600 mb-2">Booking ID: <span className="font-medium">{booking._id}</span></p>
+          {booking.contactInfo && booking.contactInfo.email && (
+            <p className="text-sm text-gray-600 mb-2">Email: <span className="font-medium">{booking.contactInfo.email}</span></p>
+          )}
+        </div>
 
         {/* Flight Info */}
         <div className="border p-4 rounded-md">
@@ -62,6 +116,9 @@ const BookingDetails = () => {
           </p>
           <p className="font-medium text-gray-600">
             Airline: {booking.flight.airline} ({booking.flight.flightNumber})
+          </p>
+          <p className="font-medium text-gray-600">
+            Class: {booking.cabinClass.charAt(0).toUpperCase() + booking.cabinClass.slice(1)}
           </p>
         </div>
 
@@ -81,11 +138,24 @@ const BookingDetails = () => {
           <p className="flex items-center gap-2 text-green-700 font-semibold">
             <FaMoneyBillWave /> ₹{booking.totalPrice.toFixed(2)}
           </p>
-          <p>Status: 
-            <span className={`ml-2 font-semibold ${
-              booking.status === "confirmed" ? "text-green-600" : "text-yellow-600"
-            }`}>
+          <p>
+            Status:{" "}
+            <span
+              className={`ml-2 font-semibold ${
+                booking.status === "confirmed" ? "text-green-600" : "text-yellow-600"
+              }`}
+            >
               {booking.status.toUpperCase()}
+            </span>
+          </p>
+          <p>
+            Payment:{" "}
+            <span
+              className={`ml-2 font-semibold ${
+                booking.paymentStatus === "paid" ? "text-green-600" : "text-red-600"
+              }`}
+            >
+              {booking.paymentStatus.toUpperCase()}
             </span>
           </p>
         </div>

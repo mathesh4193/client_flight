@@ -1,6 +1,8 @@
 import axios from 'axios';
 
 // Use relative paths; avoid embedding API base URL in the bundle
+
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
@@ -58,6 +60,8 @@ export const bookingsAPI = {
   create: (data) => api.post('/api/bookings', data),
   getByUser: (userId) => api.get(`/api/bookings/user/${userId}`),
   getById: (id) => api.get(`/api/bookings/${id}`),
+  getUserBookings: () => api.get('/api/bookings/user'),
+  getBookingsByEmail: (email) => api.get(`/api/bookings/email/${email}`),
   cancel: (id, data) => api.put(`/api/bookings/${id}/cancel`, data),
   checkIn: (id) => api.put(`/api/bookings/${id}/checkin`, {}),
   getAll: () => api.get('/api/bookings'),
