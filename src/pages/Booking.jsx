@@ -11,8 +11,6 @@ import {
 import { config } from "../config";
 import { useAuth } from "../context/AuthContext";
 
-const stripePromise = loadStripe(config.STRIPE_PUBLISHABLE_KEY);
-
 // ===============================
 // Stripe Payment Form
 // ===============================
@@ -22,6 +20,22 @@ const PaymentForm = ({ clientSecret, bookingId, onSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [isReady, setIsReady] = useState(false);
+
+  // Listen for Stripe PaymentElement load errors to surface to the user
+  useEffect(() => {
+    if (!elements) return;
+    try {
+      const paymentElement = elements.getElement(PaymentElement);
+      if (paymentElement && typeof paymentElement.on === "function") {
+        paymentElement.on("loaderror", (ev) => {
+          const message = ev?.error?.message || "Payment form failed to load.";
+          setError(message);
+        });
+      }
+    } catch (_) {
+      // no-op: element API differences across versions
+    }
+  }, [elements]);
 
   const handlePayment = async (e) => {
     e.preventDefault();
@@ -61,7 +75,7 @@ const PaymentForm = ({ clientSecret, bookingId, onSuccess }) => {
       }
     } catch (err) {
       console.error(err);
-      setError("Payment failed. Please try again.");
+      setError(err.response?.data?.message || "Payment failed. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -100,6 +114,30 @@ const Booking = () => {
   const [contactInfo, setContactInfo] = useState({ email: "", phone: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [stripePromise, setStripePromise] = useState(null);
+
+  // Load Stripe publishable key from backend (with env fallback)
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/config/stripe-publishable");
+        const data = await res.json();
+        if (mounted && data?.publishableKey) {
+          setStripePromise(loadStripe(data.publishableKey));
+          return;
+        }
+      } catch (err) {
+        // Network or backend missing — fall back to client config
+      }
+      if (mounted && config.STRIPE_PUBLISHABLE_KEY) {
+        setStripePromise(loadStripe(config.STRIPE_PUBLISHABLE_KEY));
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // Autofill contact info
   useEffect(() => {
@@ -125,18 +163,18 @@ const Booking = () => {
     fetchFlight();
   }, [flightId]);
 
-  // Passenger handlers
-  const handlePassengerChange = (index, field, value) => {
-    const updated = [...passengers];
-    updated[index][field] = value;
-    setPassengers(updated);
-  };
-
   const addPassenger = () => {
     setPassengers([
       ...passengers,
       { firstName: "", lastName: "", dateOfBirth: "", gender: "male" },
     ]);
+  };
+
+  const handlePassengerChange = (index, field, value) => {
+    const updatedPassengers = passengers.map((p, i) =>
+      i === index ? { ...p, [field]: value } : p
+    );
+    setPassengers(updatedPassengers);
   };
 
   const removePassenger = (index) => {
@@ -356,7 +394,7 @@ const Booking = () => {
         )}
 
         {/* Payment Section */}
-        {booking && clientSecret && (
+        {booking && clientSecret && stripePromise && (
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-gray-800">
               Booking Confirmed — Proceed to Payment
