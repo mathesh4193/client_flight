@@ -1,8 +1,6 @@
 import axios from 'axios';
 
-// Use relative paths; avoid embedding API base URL in the bundle
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5000';
 const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
