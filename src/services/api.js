@@ -56,14 +56,13 @@ export const flightsAPI = {
   delete: (id) => api.delete(`/api/flights/${id}`),
 };
 
-// Bookings API
 export const bookingsAPI = {
   create: (data) => api.post('/api/bookings', data),
-  getByUser: (userId, params) => api.get(`/api/bookings/user/${userId}`, { params }),
+  getByUser: (userId) => api.get(`/api/bookings/user/${userId}`),
   getById: (id) => api.get(`/api/bookings/${id}`),
   cancel: (id, data) => api.put(`/api/bookings/${id}/cancel`, data),
-  checkIn: (id) => api.put(`/api/bookings/${id}/checkin`),
-  getAll: (params) => api.get('/api/bookings', { params }),
+  checkIn: (id) => api.put(`/api/bookings/${id}/checkin`, {}),
+  getAll: () => api.get('/api/bookings'),
 };
 
 // Payments API

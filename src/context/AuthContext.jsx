@@ -1,25 +1,22 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
-import api, { authAPI } from '../services/api';
-
+import { authAPI } from '../services/api';
 
 const AuthContext = createContext();
 
+// ✅ Initial State
 const initialState = {
-  user: null,
-  token: localStorage.getItem('token'),
-  isAuthenticated: false,
-  loading: true,
+  user: JSON.parse(localStorage.getItem('user')) || null,
+  token: localStorage.getItem('token') || null,
+  isAuthenticated: !!localStorage.getItem('token'),
+  loading: false,
   error: null
 };
 
+// ✅ Reducer
 const authReducer = (state, action) => {
   switch (action.type) {
     case 'AUTH_START':
-      return {
-        ...state,
-        loading: true,
-        error: null
-      };
+      return { ...state, loading: true, error: null };
     case 'AUTH_SUCCESS':
       return {
         ...state,
@@ -39,147 +36,121 @@ const authReducer = (state, action) => {
         error: action.payload
       };
     case 'LOGOUT':
-      return {
-        ...state,
-        user: null,
-        token: null,
-        isAuthenticated: false,
-        loading: false,
-        error: null
-      };
+      return { user: null, token: null, isAuthenticated: false, loading: false, error: null };
     case 'UPDATE_USER':
-      return {
-        ...state,
-        user: { ...state.user, ...action.payload }
-      };
+      return { ...state, user: { ...state.user, ...action.payload } };
     case 'CLEAR_ERROR':
-      return {
-        ...state,
-        error: null
-      };
+      return { ...state, error: null };
     default:
       return state;
   }
 };
 
+// ✅ AuthProvider
 export const AuthProvider = ({ children }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
-  // Token is attached to requests via API interceptors
+  // ✅ Auto-check token and fetch profile
   useEffect(() => {
-    // no-op: api client reads token from localStorage per request
-  }, [state.token]);
-
-  // Check if user is logged in on app start
-  useEffect(() => {
-    const checkAuth = async () => {
+    const verifyUser = async () => {
       if (state.token) {
         try {
-          const response = await authAPI.getProfile();
+          const res = await authAPI.getProfile();
           dispatch({
             type: 'AUTH_SUCCESS',
-            payload: {
-              user: response.data.user,
-              token: state.token
-            }
+            payload: { user: res.data.user, token: state.token }
           });
-        } catch (error) {
+          localStorage.setItem('user', JSON.stringify(res.data.user));
+        } catch (err) {
           localStorage.removeItem('token');
-          dispatch({ type: 'AUTH_FAILURE', payload: 'Session expired' });
+          localStorage.removeItem('user');
+          dispatch({ type: 'AUTH_FAILURE', payload: 'Session expired. Please login again.' });
         }
-      } else {
-        dispatch({ type: 'AUTH_FAILURE', payload: null });
       }
     };
+    verifyUser();
+  }, [state.token]);
 
-    checkAuth();
-  }, []);
-
+  // ✅ Login
   const login = async (email, password) => {
     dispatch({ type: 'AUTH_START' });
     try {
-      const response = await authAPI.login({ email, password });
-      const { token, user } = response.data;
-      
+      const res = await authAPI.login({ email, password });
+      const { token, user } = res.data;
+
       localStorage.setItem('token', token);
-      dispatch({
-        type: 'AUTH_SUCCESS',
-        payload: { user, token }
-      });
-      
+      localStorage.setItem('user', JSON.stringify(user));
+
+      dispatch({ type: 'AUTH_SUCCESS', payload: { user, token } });
       return { success: true };
-    } catch (error) {
-      const message = error.response?.data?.message || 'Login failed';
+    } catch (err) {
+      const message = err.response?.data?.message || 'Login failed';
       dispatch({ type: 'AUTH_FAILURE', payload: message });
       return { success: false, error: message };
     }
   };
 
+  // ✅ Register
   const register = async (userData) => {
     dispatch({ type: 'AUTH_START' });
     try {
-      const response = await authAPI.register(userData);
-      const { token, user } = response.data;
-      
+      const res = await authAPI.register(userData);
+      const { token, user } = res.data;
+
       localStorage.setItem('token', token);
-      dispatch({
-        type: 'AUTH_SUCCESS',
-        payload: { user, token }
-      });
-      
+      localStorage.setItem('user', JSON.stringify(user));
+
+      dispatch({ type: 'AUTH_SUCCESS', payload: { user, token } });
       return { success: true };
-    } catch (error) {
-      const message = error.response?.data?.message || 'Registration failed';
+    } catch (err) {
+      const message = err.response?.data?.message || 'Registration failed';
       dispatch({ type: 'AUTH_FAILURE', payload: message });
       return { success: false, error: message };
     }
   };
 
-
-  const logout = async () => {
-    try { await authAPI.logout(); } catch (e) { /* ignore */ }
+  // ✅ Logout
+  const logout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('user');
     dispatch({ type: 'LOGOUT' });
   };
 
+  // ✅ Update profile
   const updateProfile = async (profileData) => {
     try {
-      const response = await authAPI.updateProfile(profileData);
-      dispatch({
-        type: 'UPDATE_USER',
-        payload: response.data.user
-      });
+      const res = await authAPI.updateProfile(profileData);
+      dispatch({ type: 'UPDATE_USER', payload: res.data.user });
+      localStorage.setItem('user', JSON.stringify(res.data.user));
       return { success: true };
-    } catch (error) {
-      const message = error.response?.data?.message || 'Update failed';
+    } catch (err) {
+      const message = err.response?.data?.message || 'Update failed';
       return { success: false, error: message };
     }
   };
 
-  const clearError = useCallback(() => {
-    dispatch({ type: 'CLEAR_ERROR' });
-  }, [dispatch]);
-
-  const value = {
-    ...state,
-    login,
-    register,
-    logout,
-    updateProfile,
-    clearError
-  };
+  // ✅ Clear Error
+  const clearError = useCallback(() => dispatch({ type: 'CLEAR_ERROR' }), []);
 
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider
+      value={{
+        ...state,
+        login,
+        register,
+        logout,
+        updateProfile,
+        clearError
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
 };
 
+// ✅ Custom Hook
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 };
