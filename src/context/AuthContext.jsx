@@ -3,7 +3,7 @@ import { authAPI } from '../services/api';
 
 const AuthContext = createContext();
 
-// ✅ Initial State
+// Initial State
 const initialState = {
   user: JSON.parse(localStorage.getItem('user')) || null,
   token: localStorage.getItem('token') || null,
@@ -12,7 +12,7 @@ const initialState = {
   error: null
 };
 
-// ✅ Reducer
+// Reducer
 const authReducer = (state, action) => {
   switch (action.type) {
     case 'AUTH_START':
@@ -46,11 +46,11 @@ const authReducer = (state, action) => {
   }
 };
 
-// ✅ AuthProvider
+// AuthProvider
 export const AuthProvider = ({ children }) => {
   const [state, dispatch] = useReducer(authReducer, initialState);
 
-  // ✅ Auto-check token and fetch profile
+  // Auto-check token and fetch profile
   useEffect(() => {
     const verifyUser = async () => {
       if (state.token) {
@@ -71,7 +71,7 @@ export const AuthProvider = ({ children }) => {
     verifyUser();
   }, [state.token]);
 
-  // ✅ Login
+  // Login
   const login = async (email, password) => {
     dispatch({ type: 'AUTH_START' });
     try {
@@ -90,7 +90,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // ✅ Register
+  // Register
   const register = async (userData) => {
     dispatch({ type: 'AUTH_START' });
     try {
@@ -109,14 +109,14 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // ✅ Logout
+  // Logout
   const logout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     dispatch({ type: 'LOGOUT' });
   };
 
-  // ✅ Update profile
+  // Update profile
   const updateProfile = async (profileData) => {
     try {
       const res = await authAPI.updateProfile(profileData);
@@ -129,7 +129,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // ✅ Clear Error
+  // Clear Error
   const clearError = useCallback(() => dispatch({ type: 'CLEAR_ERROR' }), []);
 
   return (
@@ -148,7 +148,7 @@ export const AuthProvider = ({ children }) => {
   );
 };
 
-// ✅ Custom Hook
+// Custom Hook
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) throw new Error('useAuth must be used within an AuthProvider');

@@ -60,7 +60,7 @@ const Navbar = () => {
               <>
                 {/* Navigation links for logged-in users */}
                 <Link 
-                  to="/bookings" 
+                  to="/my-bookings" 
                   className="text-gray-700 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium transition-colors flex items-center"
                 >
                   <FaBookOpen className="h-4 w-4 mr-1" />
@@ -98,7 +98,7 @@ const Navbar = () => {
                         Profile
                       </Link>
                       <Link
-                        to="/bookings"
+                        to="/my-bookings"
                         className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
                         onClick={() => setIsProfileOpen(false)}
                       >
@@ -179,7 +179,7 @@ const Navbar = () => {
               {isAuthenticated ? (
                 <>
                   <Link
-                    to="/bookings"
+                    to="/my-bookings"
                     className="block px-3 py-2 text-base font-medium text-gray-700 hover:text-primary-600 hover:bg-gray-50 rounded-md flex items-center"
                     onClick={() => setIsMenuOpen(false)}
                   >

@@ -10,7 +10,7 @@ import Register from './pages/Register';
 import Search from './pages/Search';
 import FlightDetails from './pages/FlightDetails';
 import Booking from './pages/Booking';
-import Bookings from './pages/Bookings';
+import MyBookings from './pages/MyBookings';  
 import BookingDetails from './pages/BookingDetails';
 import Profile from './pages/Profile';
 import AdminDashboard from './pages/Admin/AdminDashboard';
@@ -87,10 +87,10 @@ function App() {
               } 
             />
             <Route 
-              path="/bookings" 
+              path="/my-bookings" 
               element={
                 <ProtectedRoute>
-                  <Layout><Bookings /></Layout>
+                  <Layout><MyBookings /></Layout>
                 </ProtectedRoute>
               } 
             />
